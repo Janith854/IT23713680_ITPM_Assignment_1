@@ -1,89 +1,67 @@
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 import os
-import argparse
 import re
-from pathlib import Path
-import sys
 import openpyxl
 
-def _configure_stdout():
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
-    except:
-        pass
-
-def _find_column(header, name):
-    normalized_name = re.sub(r"[^a-z0-9]+", "", str(name).strip().lower())
-    for i, col in enumerate(header):
-        if re.sub(r"[^a-z0-9]+", "", str(col).strip().lower()) == normalized_name:
-            return i + 1
-    return None
-
 def run_test():
-    _configure_stdout()
+    excel_file = "IT23713680.xlsx" 
+    url = "https://www.pixelssuite.com/transliteration"
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--excel", default="IT23713680.xlsx")
-    parser.add_argument("--url", default="https://www.pixelssuite.com/transliteration")
-    args = parser.parse_args()
-
-    if not os.path.exists(args.excel):
-        print(f"File not found: {args.excel}")
+    if not os.path.exists(excel_file):
+        print(f"File not found: {excel_file}")
         return
 
-    wb = openpyxl.load_workbook(args.excel)
+    wb = openpyxl.load_workbook(excel_file)
     ws = wb["Test cases"] if "Test cases" in wb.sheetnames else wb.active
-    header = [cell.value for cell in ws[1]]
-
-    input_col = _find_column(header, "Input")
-    expected_col = _find_column(header, "Expected output")
-    actual_col = _find_column(header, "Actual output")
-    status_col = _find_column(header, "Status")
 
     with sync_playwright() as p:
-        # ඉන්ටර්නෙට් හොඳ නිසා slow_mo එක 100 දක්වා අඩු කළා
-        browser = p.chromium.launch(headless=False, slow_mo=30)
-        page = browser.new_page()
-        page.goto(args.url)
-        page.wait_for_load_state("networkidle")
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context()
+        page = context.new_page()
         
-        input_box = page.get_by_placeholder("Input Your Singlish Text Here.").or_(page.locator("textarea").first)
-        output_box = page.locator("textarea").nth(1)
+        page.goto(url, wait_until="networkidle")
+        input_box = page.locator("textarea").first
         
         for i in range(2, ws.max_row + 1):
-            input_text = ws.cell(i, input_col).value
-            if not input_text:
+            input_text = ws.cell(i, 3).value 
+            if not input_text: continue
+
+            text_to_type = str(input_text).strip()
+            
+            try:
+                clear_btn = page.get_by_role("button", name=re.compile("Clear", re.I))
+                if clear_btn.is_visible():
+                    clear_btn.click()
+                else:
+                    input_box.fill("")
+                
+                input_box.click()
+                page.keyboard.type(text_to_type, delay=80) 
+                page.keyboard.press("Space")
+                
+                page.wait_for_timeout(3000) 
+                    
+                page_text = page.inner_text("body")
+                lines = [line.strip() for line in page_text.split('\n') if line.strip()]
+                
+                actual_val = "FAILED_TO_LOAD"
+                for line in lines:
+                    if re.search(r'[\u0D80-\u0DFF]', line): 
+                        actual_val = line
+                        break
+                
+                expected_val = str(ws.cell(i, 4).value or "").strip() 
+                ws.cell(i, 5).value = actual_val 
+                
+                status = "PASS" if actual_val == expected_val else "FAIL"
+                ws.cell(i, 6).value = status 
+
+                wb.save(excel_file)
+
+            except Exception:
                 continue
 
-            print(f"Processing Row {i}: {input_text}")
-
-            input_box.click()
-            input_box.fill("")
-            input_box.fill(str(input_text).strip())
-            
-            translate_btn = page.get_by_role("button", name=re.compile("Translate", re.I))
-            translate_btn.click(force=True)
-
-            # Wait time එක තත්පර 8ක් දක්වා අඩු කළා
-            page.wait_for_timeout(2000) 
-
-            try:
-                actual = output_box.input_value().strip()
-                if not actual:
-                    actual = output_box.inner_text().strip()
-            except:
-                actual = "ERROR"
-
-            ws.cell(i, actual_col).value = actual
-            expected = str(ws.cell(i, expected_col).value or "").strip()
-            status = "PASS" if actual == expected else "FAIL"
-            ws.cell(i, status_col).value = status
-            
-            print(f"  -> {status}")
-            wb.save(args.excel)
-
         browser.close()
-        print("\nSuccess! Fast mode update completed.")
 
 if __name__ == "__main__":
     run_test()

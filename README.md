@@ -31,7 +31,7 @@ playwright install
 🚀 Execution
 To run the automated tests and generate results in the Excel sheet, execute the following command:
 
-python test_automation.py--excel "IT23713680.xlsx" --url "https://www.pixelssuite.com/chat-translator" --output-wait-ms 8000
+python test_automation.py --excel "IT23713680.xlsx" --url "https://www.pixelssuite.com/transliteration"
 
 📂 Project Structure
 test_automation.py: The core logic for web automation and data processing.  
@@ -40,7 +40,7 @@ IT23713680.xlsx: The Excel file containing the 50 test cases and recorded result
 
 README.md: Project documentation and execution guide.  
 
-Git_Link.txt: Text file containing the public repository URL
+
 
 👤 Author
 Name:NIRMAL BAAJ

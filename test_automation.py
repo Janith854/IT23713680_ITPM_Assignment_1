@@ -2,11 +2,9 @@ from playwright.sync_api import sync_playwright
 import os
 import re
 import openpyxl
+import argparse
 
-def run_test():
-    excel_file = "IT23713680.xlsx" 
-    url = "https://www.pixelssuite.com/transliteration"
-
+def run_test(excel_file, url):
     if not os.path.exists(excel_file):
         print(f"File not found: {excel_file}")
         return
@@ -64,4 +62,9 @@ def run_test():
         browser.close()
 
 if __name__ == "__main__":
-    run_test()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--excel", required=True)
+    parser.add_argument("--url", required=True)
+    
+    args = parser.parse_args()
+    run_test(args.excel, args.url)
